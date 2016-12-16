@@ -21,35 +21,55 @@ from netmiko.utilities import obtain_netmiko_filename, write_tmp_file, ensure_di
 from netmiko.utilities import find_netmiko_dir
 from netmiko.utilities import SHOW_RUN_MAPPER
 
+#2016-12-16/DN
+import json
+#2016-12-16/DN
+import logging
+
+# 2016-12-16/DN: comment the following line to enable debug messages (would be better as a CLI option)
+logging.disable(logging.CRITICAL)
+logLevel = logging.DEBUG
+logFormat = "%(levelname)-8s == %(asctime)s %(module)s  Line:%(lineno)4d  %(funcName)s == %(message)s"
+logging.basicConfig(level=logLevel, format=logFormat, datefmt='%Y-%m-%d %H:%M:%S')
+logging.debug('=== START ===')
+
 GREP = '/bin/grep'
 if not os.path.exists(GREP):
     GREP = '/usr/bin/grep'
 NETMIKO_BASE_DIR = '~/.netmiko'
-ERROR_PATTERN = "%%%failed%%%"
+ERROR_PATTERN = "===failed===\n"
 __version__ = '0.0.3'
 
 
 def grepx(files, pattern, grep_options, use_colors=True):
     """Call system grep"""
+    logging.debug('')
     if not isinstance(files, (list, tuple)):
+        logging.debug('')
         files = [files]
     if use_colors:
+        logging.debug('')
         grep_options += ['--color=auto']
 
     # Make grep output look nicer by 'cd netmiko_full_dir'
     _, netmiko_full_dir = find_netmiko_dir()
+    logging.debug('')
     os.chdir(netmiko_full_dir)
     # Convert files to strip off the directory
     retrieve_file = lambda x: x.split('/')[-1]   # noqa
     files = [retrieve_file(a_file) for a_file in files]
     files.sort()
     grep_list = [GREP] + grep_options + [pattern] + files
+    logging.debug(grep_list)
     proc = subprocess.Popen(grep_list, shell=False)
+    logging.debug('')
     proc.communicate()
+    logging.debug('')
     return ''
 
 
 def ssh_conn(device_name, a_device, cli_command, output_q):
+    logging.debug('')
     try:
         net_connect = ConnectHandler(**a_device)
         net_connect.enable()
@@ -58,10 +78,12 @@ def ssh_conn(device_name, a_device, cli_command, output_q):
     except Exception:
         output = ERROR_PATTERN
     output_q.put({device_name: output})
+    logging.debug('')
 
 
 def parse_arguments(args):
     """Parse command-line arguments."""
+    logging.debug('')
     description = "Grep pattern search on Netmiko output (defaults to running-config)"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("pattern", nargs='?', help="Pattern to search for",
@@ -78,15 +100,20 @@ def parse_arguments(args):
     parser.add_argument("--hide-failed", help="Hide failed devices", action="store_true")
     parser.add_argument("--version", help="Display version", action="store_true")
     cli_args = parser.parse_args(args)
+    logging.debug("cli_args = {}".format(cli_args))
     if not cli_args.list_devices and not cli_args.version:
         if not cli_args.devices or not cli_args.pattern:
             parser.error('Grep pattern or devices not specified.')
+    logging.debug('')
     return cli_args
 
 
 def main(args):
+    logging.debug('')
     start_time = datetime.now()
     cli_args = parse_arguments(args)
+    logging.debug("args = {}".format(args))
+    logging.debug("cli_args = {}".format(cli_args))
 
     version = cli_args.version
     if version:
@@ -103,12 +130,16 @@ def main(args):
     if cli_command:
         cmd_arg = True
     device_or_group = cli_args.devices.strip()
+    logging.debug("device_or_group = {}".format(device_or_group))
     pattern = cli_args.pattern
     use_cached_files = cli_args.use_cache
     hide_failed = cli_args.hide_failed
 
     output_q = Queue()
     my_devices = load_devices()
+    logging.debug("XXXmy_devices = {}".format(my_devices))
+    logging.debug("list_devices = {}".format("======================="))
+    logging.debug("list_devices = {}".format(json.dumps(my_devices, indent=4, sort_keys=True)))
     if device_or_group == 'all':
         device_group = obtain_all_devices(my_devices)
     else:
@@ -178,6 +209,7 @@ def main(args):
             for device_name in failed_devices:
                 print("  {}".format(device_name))
             print()
+    logging.debug('=== END ===')
     return 0
 
 if __name__ == "__main__":
